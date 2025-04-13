@@ -2,14 +2,16 @@ import sys
 import os
 import ipaddress
 import wifi
+import ssl
 import socketpool
 import time
 import board
+import adafruit_requests
+import adafruit_connection_manager
 from digitalio import DigitalInOut, Direction
 
 # This needs to be in the lib directory on the board
 from adafruit_httpserver import Server, Request, Response, POST, GET
-
 
 #  onboard LED setup
 led = DigitalInOut(board.LED)
@@ -39,6 +41,10 @@ for retries in range(5):
 # Success ...
 print("Connected!")
 pool = socketpool.SocketPool(wifi.radio)
+
+# Requests
+ssl_context = adafruit_connection_manager.get_radio_ssl_context(wifi.radio)
+requests = adafruit_requests.Session(pool, ssl_context)
 
 #  prints MAC address to REPL
 print("My MAC addr:", [hex(i) for i in wifi.radio.mac_address])
@@ -73,6 +79,23 @@ def base(request: Request):
 
     text = f"""
     <h2>Now responding on IP: {server_ip}</h2>
+    """
+
+    #  serve the HTML with content type text/html
+    return Response(request, html(text), content_type='text/html')
+
+# Time route:
+@server.route("/time/")
+def base(request: Request):
+
+    current_time =""
+    time_json = requests.get("https://timeapi.io/api/time/current/zone?timeZone=Europe%2FLondon").json()
+    current_time = time_json['dayOfWeek'] + ' ' + str(time_json['day']) + '/' + str(time_json['month']) + '/' + str(time_json['year'])
+    current_time = current_time + f"<h3>{time_json['time']}</h3>"
+
+    text = f"""
+    <h2>{current_time}</h2>
+    <pre>{str(time_json).replace(',','\n')}</pre>
     """
 
     #  serve the HTML with content type text/html
